@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskAlert</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        TaskAlert
+        <button class="add-task-btn" id="add-task-btn">+</button>
+    </header>
+
+    <section class="task-list" id="deures-list">
+        <h3>DEURES:</h3>
+    </section>
+
+    <section class="task-list" id="examens-list">
+        <h3>EXÀMENS:</h3>
+    </section>
+
+    <section class="add-task" id="add-task-section" style="display: none;">
+        <h3>Afegir Tasca:</h3>
+        <form id="task-form">
+            <label for="task-type">Tipus de tasca:</label>
+            <select id="task-type">
+                <option value="deure">Deures</option>
+                <option value="examen">Examen</option>
+            </select>
+
+            <label for="task-name">Nom<label>
+            <input type="text" id="task-name" required>
+
+            <label for="task-date">Dia de la notificació:</label>
+            <input type="date" id="task-date" required>
+
+            <label for="task-time">Hora de notificació:</label>
+            <input type="time" id="task-time" required>
+
+            <button type="submit">Afegir</button>
+        </form>
+    </section>
+
+    <script>
+        const addTaskBtn = document.getElementById('add-task-btn');
+        const addTaskSection = document.getElementById('add-task-section');
+        const taskForm = document.getElementById('task-form');
+        const deuresList = document.getElementById('deures-list');
+        const examensList = document.getElementById('examens-list');
+
+        // Mostrar el formulari per afegir una nova tasca
+        addTaskBtn.addEventListener('click', () => {
+            addTaskSection.style.display = 'block';
+        });
+
+        // Quan s'envia el formulari
+        taskForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const taskType = document.getElementById('task-type').value;
+            const taskName = document.getElementById('task-name').value;
+            const taskDate = document.getElementById('task-date').value;
+            const taskTime = document.getElementById('task-time').value;
+
+            const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+
+            const newTask = {
+                id: Date.now(),
+                type: taskType,
+                name: taskName,
+                date: taskDate,
+                time: taskTime,
+            };
+
+            tasks.push(newTask);
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+
+            loadTasks();
+            scheduleNotification(newTask);
+            addTaskSection.style.display = 'none';
+            taskForm.reset();
+        });
+
+        // Funció per carregar les tasques des de localStorage
+        function loadTasks() {
+            const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            deuresList.innerHTML = '';
+            examensList.innerHTML = '';
+
+            tasks.forEach(task => {
+                createTaskElement(task);
+            });
+        }
+
+        // Funció per crear un nou element de tasca
+        function createTaskElement(task) {
+            const taskElement = document.createElement('div');
+            taskElement.classList.add('task-item');
+            taskElement.textContent = `${task.name} - ${task.date} a les ${task.time}`;
+
+            // Crear el botó d'eliminar
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Eliminar';
+            deleteButton.style.marginLeft = '10px';
+            deleteButton.onclick = function() {
+                deleteTask(task.id);
+            };
+
+            taskElement.appendChild(deleteButton);
+
+            if (task.type === 'deure') {
+                deuresList.appendChild(taskElement);
+            } else {
+                examensList.appendChild(taskElement);
+            }
+        }
+
+        // Funció per eliminar una tasca
+        function deleteTask(taskId) {
+            let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            tasks = tasks.filter(task => task.id !== taskId);
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+            loadTasks();
+        }
+
+        // Funció per programar notificacions
+        function scheduleNotification(task) {
+            const taskDateTime = new Date(`${task.date}T${task.time}`);
+            const currentTime = new Date();
+
+            // Només programar si la data és futura
+            if (taskDateTime > currentTime) {
+                const timeToNotification = taskDateTime - currentTime;
+
+                setTimeout(() => {
+                    showNotification(task);
+                }, timeToNotification);
+            }
+        }
+
+        // Funció per mostrar la notificació
+        function showNotification(task) {
+            // Comprovar permisos
+            if (Notification.permission === 'granted') {
+                new Notification(`Recordatori: ${task.name}`, {
+                    body: `Tens un ${task.type} el ${task.date} a les ${task.time}.`,
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showNotification(task);
+                    }
+                });
+            }
+        }
+
+        // Carregar les tasques al carregar la pàgina
+        window.addEventListener('DOMContentLoaded', loadTasks);
+    </script>
+</body>
+</html>
