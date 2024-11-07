@@ -9,9 +9,9 @@
 <body>
 
     <header>
-        <button id="mode-toggle-btn">Canviar a mode professor</button>
         TaskAlert
-        <button class="add-task-btn" id="add-task-btn">+</button>
+        <button class="add-task-btn" id="add-task-btn" style="display: none;">+</button>
+        <button id="role-toggle-btn">Alumne</button>
     </header>
 
     <section class="task-list" id="deures-list">
@@ -23,15 +23,17 @@
     </section>
 
     <section class="add-task" id="add-task-section" style="display: none;">
-        <h3>Afegir Tasca:</h3>
+        <h3 id="task-form-title">Afegir Tasca:</h3>
         <form id="task-form">
+            <input type="hidden" id="edit-task-id">
+
             <label for="task-type">Tipus de tasca:</label>
             <select id="task-type">
                 <option value="deure">Deures</option>
                 <option value="examen">Examen</option>
             </select>
 
-            <label for="task-name">Nom<label>
+            <label for="task-name">Nom</label>
             <input type="text" id="task-name" required>
 
             <label for="task-date">Dia de la notificació:</label>
@@ -40,35 +42,45 @@
             <label for="task-time">Hora de notificació:</label>
             <input type="time" id="task-time" required>
 
-            <button type="submit">Afegir</button>
+            <button type="submit">Guardar</button>
         </form>
     </section>
 
+    <button id="theme-toggle-btn">🌙</button>
+
     <script>
+        let isProfessor = true; // Variable per controlar el mode professor o alumne
+
         const addTaskBtn = document.getElementById('add-task-btn');
+        const roleToggleBtn = document.getElementById('role-toggle-btn');
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
         const addTaskSection = document.getElementById('add-task-section');
         const taskForm = document.getElementById('task-form');
         const deuresList = document.getElementById('deures-list');
         const examensList = document.getElementById('examens-list');
-        const modeToggleBtn = document.getElementById('mode-toggle-btn');
-
-        let isProfessor = false;
-
-        // Funció per canviar de mode
-        modeToggleBtn.addEventListener('click', () => {
-            isProfessor = !isProfessor;
-            modeToggleBtn.textContent = isProfessor ? "Canviar a mode alumne" : "Canviar a mode professor";
-            addTaskBtn.style.display = isProfessor ? 'block' : 'none';
-        });
+        const editTaskIdInput = document.getElementById('edit-task-id');
 
         // Mostrar el formulari per afegir una nova tasca
         addTaskBtn.addEventListener('click', () => {
-            if (isProfessor) {
-                addTaskSection.style.display = 'block';
-            }
+            addTaskSection.style.display = 'block';
+            taskForm.reset();
+            document.getElementById('task-form-title').textContent = 'Afegir Tasca';
         });
 
-        // Resta del codi de JavaScript per afegir, mostrar, i eliminar tasques
+        // Canviar entre mode professor i alumne
+        roleToggleBtn.addEventListener('click', () => {
+            isProfessor = !isProfessor;
+            roleToggleBtn.textContent = isProfessor ? 'Professor' : 'Alumne';
+            addTaskBtn.style.display = isProfessor ? 'block' : 'none';
+            loadTasks();
+        });
+
+        // Canviar entre mode fosc i clar
+        themeToggleBtn.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+        });
+
+        // Quan s'envia el formulari
         taskForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -79,23 +91,32 @@
 
             const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 
-            const newTask = {
-                id: Date.now(),
-                type: taskType,
-                name: taskName,
-                date: taskDate,
-                time: taskTime,
-            };
+            if (editTaskIdInput.value) {
+                // Edició d'una tasca existent
+                const taskId = parseInt(editTaskIdInput.value);
+                const taskIndex = tasks.findIndex(task => task.id === taskId);
+                tasks[taskIndex] = { id: taskId, type: taskType, name: taskName, date: taskDate, time: taskTime };
+                editTaskIdInput.value = '';
+            } else {
+                // Afegir una nova tasca
+                const newTask = {
+                    id: Date.now(),
+                    type: taskType,
+                    name: taskName,
+                    date: taskDate,
+                    time: taskTime,
+                };
+                tasks.push(newTask);
+                scheduleNotification(newTask);
+            }
 
-            tasks.push(newTask);
             localStorage.setItem('tasks', JSON.stringify(tasks));
-
             loadTasks();
-            scheduleNotification(newTask);
             addTaskSection.style.display = 'none';
             taskForm.reset();
         });
 
+        // Funció per carregar les tasques
         function loadTasks() {
             const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
             deuresList.innerHTML = '';
@@ -106,19 +127,26 @@
             });
         }
 
+        // Funció per crear un element de tasca
         function createTaskElement(task) {
             const taskElement = document.createElement('div');
             taskElement.classList.add('task-item');
             taskElement.textContent = `${task.name} - ${task.date} a les ${task.time}`;
 
-            const deleteButton = document.createElement('button');
-            deleteButton.textContent = 'Eliminar';
-            deleteButton.style.marginLeft = '10px';
-            deleteButton.onclick = function() {
-                deleteTask(task.id);
-            };
-
-            taskElement.appendChild(deleteButton);
+            if (isProfessor) {
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Editar';
+                editButton.onclick = function() {
+                    editTask(task);
+                };
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Eliminar';
+                deleteButton.onclick = function() {
+                    deleteTask(task.id);
+                };
+                taskElement.appendChild(editButton);
+                taskElement.appendChild(deleteButton);
+            }
 
             if (task.type === 'deure') {
                 deuresList.appendChild(taskElement);
@@ -127,6 +155,18 @@
             }
         }
 
+        // Funció per editar una tasca
+        function editTask(task) {
+            addTaskSection.style.display = 'block';
+            document.getElementById('task-form-title').textContent = 'Editar Tasca';
+            document.getElementById('task-type').value = task.type;
+            document.getElementById('task-name').value = task.name;
+            document.getElementById('task-date').value = task.date;
+            document.getElementById('task-time').value = task.time;
+            editTaskIdInput.value = task.id;
+        }
+
+        // Funció per eliminar una tasca
         function deleteTask(taskId) {
             let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
             tasks = tasks.filter(task => task.id !== taskId);
@@ -134,19 +174,20 @@
             loadTasks();
         }
 
+        // Funció per programar notificacions
         function scheduleNotification(task) {
             const taskDateTime = new Date(`${task.date}T${task.time}`);
             const currentTime = new Date();
 
             if (taskDateTime > currentTime) {
                 const timeToNotification = taskDateTime - currentTime;
-
                 setTimeout(() => {
                     showNotification(task);
                 }, timeToNotification);
             }
         }
 
+        // Funció per mostrar la notificació
         function showNotification(task) {
             if (Notification.permission === 'granted') {
                 new Notification(`Recordatori: ${task.name}`, {
@@ -161,6 +202,7 @@
             }
         }
 
+        // Carregar les tasques al carregar la pàgina
         window.addEventListener('DOMContentLoaded', loadTasks);
     </script>
 </body>
